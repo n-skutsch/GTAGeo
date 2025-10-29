@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <title>GTA V - Rendering Locations</title>
+    
+    <link rel="shortcut icon" type="image/x-icon" href="docs/images/favicon.ico" />
+
+    <!-- Leaflet for map functionalities -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+            background: #384950;
+        }
+        .custom_controls {
+            background: #ffffff;
+            padding: 5px;
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .custom_controls select,
+        .custom_controls button {
+            display: block;
+            width: 100px;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+
+<body>
+<div id="map"></div>
+<script>
+
+    // Create a variable for the current mode
+    const MODES = [
+        {label: 'Urban', value: 1},
+        {label: 'Rural', value: 2},
+        {label: 'Drone', value: 3}
+    ];
+    let mode = MODES[0].value;
+
+    // Create a layer group for all modes
+    const locations_urban = L.layerGroup();
+    const locations_rural = L.layerGroup();
+    const locations_drone = L.layerGroup();
+
+    // Load all tile layers
+    const layer_background = {
+        'Game': '#384950',
+        'Print': '#4eb1d0',
+        'Render': '#0d2b4f'
+    };
+    const layer_game = L.tileLayer('https://s.rsg.sc/sc/images/games/GTAV/map/game/{z}/{x}/{y}.jpg', {
+        tileSize: 256,
+        noWrap: true,
+        attribution: '&copy; <a target="_blank" rel="noopener noreferrer" href="https://socialclub.rockstargames.com/jobs/">Rockstar Games Social Club</a>'
+    });
+    const layer_print = L.tileLayer('https://s.rsg.sc/sc/images/games/GTAV/map/print/{z}/{x}/{y}.jpg', {
+        tileSize: 256,
+        noWrap: true,
+        attribution: '&copy; <a target="_blank" rel="noopener noreferrer" href="https://socialclub.rockstargames.com/jobs/">Rockstar Games Social Club</a>'
+    });
+    const layer_render = L.tileLayer('https://s.rsg.sc/sc/images/games/GTAV/map/render/{z}/{x}/{y}.jpg', {
+        tileSize: 256,
+        noWrap: true,
+        attribution: '&copy; <a target="_blank" rel="noopener noreferrer" href="https://socialclub.rockstargames.com/jobs/">Rockstar Games Social Club</a>'
+    });
+
+    // Create the map with all layers
+    const max_bounds = L.latLngBounds([0, 0], [-192, 128])
+    const map = L.map('map', {
+        crs: L.CRS.Simple,
+        center: [-98,64],
+        zoom: 2,
+        minZoom: 2,
+        maxZoom: 7,
+        layers: [layer_game, locations_urban, locations_rural, locations_drone]
+    })
+    map.setMaxBounds(max_bounds);
+
+    // Add layer control for all layers and marker groups
+    const base_layers = {
+        'Game': layer_game,
+        'Print': layer_print,
+        'Render': layer_render
+    };
+    const overlays = {
+        'Locations City': locations_urban,
+        'Locations Rural': locations_rural,
+        'Locations Drone': locations_drone
+    };
+    const layerControl = L.control.layers(base_layers, overlays).addTo(map);
+
+    // Create a new circle marker
+    function newMarker(latlng, marker_color, layer_group) {
+        new L.circleMarker(latlng, {
+            color: marker_color,
+            radius: 8,
+            layerGroup: layer_group
+        }).addTo(layer_group).on('click', onMarkerLeftClick);
+    }
+
+    // Import marker data
+    function importMarkerData() {
+
+        // Create an input element for file selection
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+
+        // Define what happens when the user selects a file
+        input.onchange = function(event) {
+
+            // Get the file that has been selected
+            const file = event.target.files[0];
+            if (!file) {
+                alert('No file selected');
+                return;
+            }
+
+            // Open the file
+            const reader = new FileReader();
+            reader.onload = function(e) {
+
+                try {
+
+                    // Read the data from the file
+                    const data = JSON.parse(e.target.result);
+
+                    // Clear the existing markers
+                    locations_urban.clearLayers();
+                    locations_rural.clearLayers();
+                    locations_drone.clearLayers();
+
+                    // Load markers into their respective layers
+                    data.markers_urban.forEach(xy => {
+                        newMarker(convertCoordsGameMap(xy), 'blue', locations_urban);
+                    });
+                    data.markers_rural.forEach(xy => {
+                        newMarker(convertCoordsGameMap(xy), 'green', locations_rural);
+                    });
+                    data.markers_drone.forEach(xy => {
+                        newMarker(convertCoordsGameMap(xy), 'red', locations_drone);
+                    });
+
+                } catch (error) {
+                    console.error('Error while reading the file: ', error);
+                    alert('Failed to import the markers from the file.');
+                }
+            };
+
+            // Read the file content
+            reader.readAsText(file);
+        };
+
+        // Trigger click event to open file dialog
+        input.click();
+    }
+
+    // Export marker data
+    function exportMarkerData() {
+        
+        const data = {
+            count_urban: locations_urban.getLayers().length,
+            count_rural: locations_rural.getLayers().length,
+            count_drone: locations_drone.getLayers().length,
+            markers_urban: [],
+            markers_rural: [],
+            markers_drone: []
+        };
+
+        // Collect markers from each layer group
+        locations_urban.eachLayer(marker => data.markers_urban.push(convertCoordsMapGame(marker.getLatLng())));
+        locations_rural.eachLayer(marker => data.markers_rural.push(convertCoordsMapGame(marker.getLatLng())));
+        locations_drone.eachLayer(marker => data.markers_drone.push(convertCoordsMapGame(marker.getLatLng())));
+
+        // Convert the data to JSON format and download it
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = 'gta_v_markers.json';
+        link.click();
+
+        // Clean up
+        URL.revokeObjectURL(url);
+    }
+
+    // Add custom control elements to the user interface
+    const customControl = L.control({position: 'topleft'});
+    customControl.onAdd = function() {
+
+        // Create a div for the custom controls
+        const div = L.DomUtil.create('div', 'custom_controls');
+        
+        // Add a dropdown menu for selecting the mode
+        const select = L.DomUtil.create('select', '', div);
+        MODES.forEach((m) => {
+            const option = document.createElement('option');
+            option.value = m.value;
+            option.text = m.label;
+            select.appendChild(option);
+        });
+        select.onchange = function (e) {
+            mode = parseInt(e.target.value, 10);
+        };
+
+        // Add a button for importing marker data
+        const importButton = L.DomUtil.create('button', '', div);
+        importButton.textContent = 'Import';
+        importButton.onclick = importMarkerData;
+
+        // Add a button for exporting marker data
+        const exportButton = L.DomUtil.create('button', '', div);
+        exportButton.textContent = 'Export';
+        exportButton.onclick = exportMarkerData;
+
+        // Add a button for clearing all markers
+        const clearButton = L.DomUtil.create('button', '', div);
+        clearButton.textContent = 'Clear Markers';
+        clearButton.onclick = function(e) {
+            locations_urban.clearLayers();
+            locations_rural.clearLayers();
+            locations_drone.clearLayers();
+        };
+
+        // Prevent clicks to be propagated to the map
+        L.DomEvent.disableClickPropagation(div);
+        
+        return div;
+    };
+    customControl.addTo(map);
+
+    // Delete markers on left click
+    function onMarkerLeftClick(e) {
+
+        // Set a flag that the marker was clicked instead of the map
+        e.originalEvent.markerClicked = true;
+
+        // Estimate the corresponding layer group and remove the marker from it
+        const layer_group = e.target.options.layerGroup;
+        layer_group.removeLayer(e.target);
+    }
+
+    // Add markers on left click
+    function onLeftClick(e) {
+
+        // Check if a marker was clicked instead of the map
+        if (e.originalEvent.markerClicked) return;
+
+        // Check if the map was clicked inside of the bounds
+        if (!max_bounds.contains(e.latlng)) return;
+
+        // Select the corresponding layer group and marker color for the mode
+        let layer_group, marker_color;
+        switch (mode) {
+            case MODES[0].value:
+                layer_group = locations_urban;
+                marker_color = 'blue';
+                break;
+            case MODES[1].value:
+                layer_group = locations_rural;
+                marker_color = 'green';
+                break;
+            case MODES[2].value:
+                layer_group = locations_drone;
+                marker_color = 'red';
+                break;
+        }
+
+        // Create a new marker
+        newMarker(e.latlng, marker_color, layer_group);
+    }
+
+    // Change the background when the base layer is changed
+    function onBaseLayerChange(e) {
+        document.getElementById('map').style.backgroundColor = layer_background[e.name];
+    }
+
+    // Convert the image coordinates to ingame coordinates
+    function convertCoordsMapGame(latlng) {
+
+        const m =    0.01422;
+        const a = -119.5;
+        const b =   58.9;
+
+        const x = (latlng.lng - b) / m;
+        const y = (latlng.lat - a) / m;
+
+        return [x, y]
+    }
+
+    // Convert the ingame coordinates to image coordinates
+    function convertCoordsGameMap(xy) {
+
+        const m =    0.01422;
+        const a = -119.5;
+        const b =   58.9;
+
+        const lat = m * xy[1] + a
+        const lng = m * xy[0] + b
+
+        return L.latLng(lat, lng)
+    }
+
+    // Add the LeftClick event listener to the map
+    map.on('click', onLeftClick);
+    map.on('baselayerchange', onBaseLayerChange);
+
+</script>
+</body>
+
+</html>

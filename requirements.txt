@@ -1,0 +1,8 @@
+cupy
+mmh3
+numpy
+opencv-python
+openexr
+requests
+watchdog
+wmi
