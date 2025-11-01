@@ -403,6 +403,9 @@ namespace DataGeneration
                 while (Function.Call<bool>(Hash.IS_PLAYER_TELEPORT_ACTIVE)) Script.Wait(1000);
             }
 
+            // Give the game time to load all the textures
+            Script.Wait(2000);
+
             return position;
         }
 

@@ -9,10 +9,10 @@ public class NoClip : Script
     private static NoClip instance;
     private bool no_clip = false;
     private readonly float[] speeds = { 0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 16.0f };
-	private int speed_level = 2;
+    private int speed_level = 2;
 
-	public NoClip()
-	{
+    public NoClip()
+    {
         instance = this;
         KeyDown += OnKeyDown;
         Tick += OnTick;
@@ -41,18 +41,22 @@ public class NoClip : Script
         bool in_vehicle = Game.Player.Character.IsInVehicle();
         int handle = in_vehicle ? Game.Player.Character.CurrentVehicle.Handle : Game.Player.Character.Handle;
 
-        // Set the heading of the player to align with the camera
-        Function.Call(Hash.SET_ENTITY_HEADING, handle, GameplayCamera.Rotation.Z);
-        GameplayCamera.RelativeHeading = 0f;
-        Function.Call(Hash.SET_GAMEPLAY_CAM_RELATIVE_PITCH, GameplayCamera.RelativePitch, 0f);
-
-        // Get the new position offset depending on the current input
+        // Get the new position offset depending on the current input and calculate the new position based on the offset
         Vector3 offset = GetDirectionFromInput();
+        Vector3 current_position = Function.Call<Vector3>(Hash.GET_ENTITY_COORDS, handle, true);
+        Vector3 new_position = current_position + offset;
 
         // Set the new position of either the character or the character's car
-        Vector3 new_position = Function.Call<Vector3>(Hash.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS, handle, offset.X, offset.Y, offset.Z);
         Function.Call(Hash.SET_ENTITY_COORDS_NO_OFFSET, handle, new_position.X, new_position.Y, new_position.Z, true, false, false);
         Game.Player.Character.Velocity = Vector3.Zero;
+
+        // If First Person View is not active
+        if (GameplayCamera.FollowPedCamViewMode != GTA.CamViewMode.FirstPerson)
+        {
+            // Set the heading of the entity to match the camera's rotation
+            if (Game.IsKeyPressed(Keys.S)) Function.Call(Hash.SET_ENTITY_HEADING, handle, GameplayCamera.Rotation.Z - Math.PI);
+            else Function.Call(Hash.SET_ENTITY_HEADING, handle, GameplayCamera.Rotation.Z);
+        }
     }
 
     public void ToggleNoClip()
@@ -78,6 +82,7 @@ public class NoClip : Script
 
             // Stop all animations
             Function.Call(Hash.CLEAR_PED_TASKS_IMMEDIATELY, Game.Player.Character);
+            Function.Call(Hash.TASK_STAND_STILL, Game.Player.Character.Handle, -1);
             Game.Player.Character.Task.ClearAll();
         }
         else
@@ -102,9 +107,9 @@ public class NoClip : Script
     {
         // Define vectors for each direction
         Vector3 direction = Vector3.Zero;
-        Vector3 vector_right = new Vector3(1, 0, 0);
-        Vector3 vector_forward = new Vector3(0, 1, 0);
-        Vector3 vector_up = new Vector3(0, 0, 1);
+        Vector3 vector_forward = GameplayCamera.Direction;
+        Vector3 vector_right = GameplayCamera.RightVector;
+        Vector3 vector_up = Vector3.WorldUp;
 
         // Estimate the direction depending on the current input
         if (Game.IsKeyPressed(Keys.W)) direction += vector_forward;
