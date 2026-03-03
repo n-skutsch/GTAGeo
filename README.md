@@ -6,6 +6,8 @@ This repository contains the data generation pipeline to generate a visual geo-l
 
 The setup can be done either semi-automatically or completely manually. In the semi-automatic setup, most of the steps are performed by an initialization script, while in the manual setup, all steps are performed by the user. The data generation has been tested on a Windows 10 system running `Grand Theft Auto V Legacy v1.0.3586.0`, `ScriptHookV v3586.0 / 889.22`, `ScriptHookVDotNet v3.7.0-nightly.48`, `RenderDoc v1.40`, and `Windowed Borderless Gaming v2.1.0.1`. Steps may vary for other versions.
 
+**Notice:** The repository will soon be updated to extend the pipeline by incorporating the generation of digital surface models (DSMs), as proposed in the paper **No Mountain, no Building, no Cue? Synthetic Data Generation of Digital Surface Models and their Application to Visual Geo-Localization**. The update will also include an optimization of the existing data generation methods.
+
 
 ## Important Notes
 
@@ -223,3 +225,29 @@ Since the modifications do not affect the online mode, do not use Rockstar's or 
 ## Citation
 
 Please cite our work if you use data from the GTAGeo dataset, generate new data using our pipeline, or modify our pipeline.
+
+```
+@inproceedings{skutsch_visapp_2026,
+   author={Skutsch, Nicolai and Hellwich, Olaf and Fuchs-Kittowski, Frank},
+   title={No Mountain, no Building, no Cue? Synthetic Data Generation of Digital Surface Models and their Application to Visual Geo-Localization},
+   booktitle={Proceedings of the 21st International Conference on Computer Vision Theory and Applications (VISAPP 2026)},
+   year={2026},
+   pages={},
+   publisher={SciTePress},
+   doi={},
+   isbn={}
+}
+```
+
+```
+@inproceedings{skutsch_icict_2026,
+   author={Skutsch, Nicolai and Hellwich, Olaf and Fuchs-Kittowski, Frank},
+   title={Synthetic Data Generation for Visual Geo-Localization using GTA V},
+   booktitle={Proceedings of 11th International Congress on Information and Communication Technology (ICICT 2026)},
+   year={2026},
+   pages={},
+   publisher={Springer},
+   doi={},
+   isbn={}
+}
+```
