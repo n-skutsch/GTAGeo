@@ -1,8 +1,7 @@
-cupy
-mmh3
-numpy
-opencv-python
-openexr
+panorama-projection-toolkit
 requests
+tomli
+tqdm
+urllib3
 watchdog
-wmi
+WMI

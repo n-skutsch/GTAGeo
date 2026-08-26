@@ -1,120 +1,97 @@
-import argparse
-import os
+import logging
 import re
 import shutil
 import subprocess
 
+from pathlib import Path
 
-# Directories in which the Data and Script files are saved
-DIRECTORY_DATA = os.path.join(os.getcwd(), 'Data')
-DIRECTORY_SCRIPT = os.path.join(os.getcwd(), 'Script')
+from utils import check_path_exists, configure_logging, find_vs_tool, load_config, replace_in_file
 
 
-def replace_in_file(file_path, old_pattern, new_pattern):
+# Load the config file
+CONFIG = load_config(Path('config.toml'))
+
+# Get the logger
+LOGGER = logging.getLogger('compile_script')
+
+
+def initialize_scripts() -> None:
     """
-    Replaces a REGEX pattern inside a file with a new pattern or string.
+    Replaces the versions and paths in the scripts with the correct ones, compiles the script, and copies the compiled
+    script, its dependencies, and the config file to the GTA V directory.
 
     Args:
-        file_path (string): The file path.
-        old_pattern (string): The pattern that should be replaced.
-        new_pattern (string): The pattern that the old pattern should be replaced with.
-
-    Returns:
         None
-    """
-    
-    # Open the file and read the data
-    with open(file_path, 'r', encoding='utf-8') as f:
-        file = f.read()
-
-    # Generate the pattern that should be replaced
-    re_pattern = re.compile(old_pattern)
-
-    # Replace the pattern in the file
-    file = re_pattern.sub(new_pattern, file)
-
-    # Open the file and write the data
-    with open(file_path, 'w+', encoding='utf-8') as f:
-        f.write(file)
-
-
-def initialize_scripts(directory_script):
-    """
-    Replaces the versions and paths in the scripts with the correct ones, compiles the script, and copies it to the GTA V directory.
-
-    Args:
-        directory_script (string): The folder path of the GTA V scripts directory.
 
     Returns:
         None
     """
 
-    # Create the directory
-    if not os.path.exists(directory_script):
-        os.mkdir(directory_script)
-
-    # Get the new API version from the compiled header file
-    with open(os.path.join(DIRECTORY_SCRIPT, 'RenderDocHeader.cs'), 'r', encoding='utf-8') as f:
-        file = f.read()
+    # Get the new API version from the RenderDoc header file
+    LOGGER.info('Reading the new API version from the RenderDoc header file.')
+    file = (Path(CONFIG['Paths']['Scripts']) / 'RenderDocHeader.cs').read_text(encoding='utf-8')
     re_pattern = r'RENDERDOC_API_(\d+_\d+_\d+)'
     match = re.search(re_pattern, file)
     if not match:
-        print('[Scripts]   ERROR: The new API version could not be found.')
-        raise RuntimeError
-    new_api_version = match.groups()[0]
+        LOGGER.info('The new API version could not be found in the RenderDoc header file.')
+        raise RuntimeError('The new API version could not be found in the RenderDoc header file.')
+    new_api_version = match.group(1)
 
     # Replace the API version in the scripts
-    print('[Scripts]   Replacing the API version with v{0} in the scripts...'.format(new_api_version))
-    replace_in_file(os.path.join(DIRECTORY_SCRIPT, 'RenderDoc.cs'), r'RENDERDOC_API_\d+_\d+_\d+', 'RENDERDOC_API_' + new_api_version)
-    print('            Done.')
-
-    # Replace the log directory in the scripts
-    print('[Scripts]   Replacing the log directroy with {0} in the scripts...'.format(os.getcwd()))
-    replace_in_file(os.path.join(DIRECTORY_SCRIPT, 'DataGenerator.cs'), r'data_path_orig = ".+";', 'data_path_orig = "{0}";'.format(DIRECTORY_DATA.replace('\\', '\\\\\\\\') + '\\\\\\\\'))
-    print('            Done.')
+    LOGGER.info(f'Replacing the API version with v{new_api_version} in the script.')
+    replace_in_file(Path(CONFIG['Paths']['Scripts']) / 'RenderDoc.cs', r'RENDERDOC_API_\d+_\d+_\d+', f'RENDERDOC_API_{new_api_version}')
+    replace_in_file(Path(CONFIG['Paths']['Scripts']) / 'RenderDoc.cs', r'eRENDERDOC_API_Version_\d+_\d+_\d+', f'eRENDERDOC_API_Version_{new_api_version}')
 
     # Compile the script
-    print('            Compiling the script...')
-    script_sln_path = os.path.join(DIRECTORY_SCRIPT, 'DataGeneration.sln')
-    result = subprocess.run(['MSBuild',
+    LOGGER.info('Compiling the script.')
+    script_sln_path = Path(CONFIG['Paths']['Scripts']) / 'DataGeneration.sln'
+    result = subprocess.run([find_vs_tool(Path(CONFIG['Paths']['VS']), 'Current/bin/MSBuild.exe'),
                              script_sln_path,
                              '-p:Configuration=Release',
                              '-p:Platform=x64',
                              '-p:AllowUnsafeBlocks=true'],
                             capture_output=True, text=True)
     if result.returncode != 0:
-        print('[RenderDoc] ERROR: {0}'.format(result.stdout))
-        raise RuntimeError
-    print('            Done.')
+        LOGGER.error(f'An error occurred during the compilation of the script. Error: {result.stdout}')
+        raise RuntimeError(f'An error occurred during the compilation of the script. Error: {result.stdout}')
 
-    # Copy the compiled DataGeneration.dll to the GTA directory
-    print('            Copying the compiled DataGeneration.dll to the GTA directory...')
-    shutil.copy(os.path.join(DIRECTORY_SCRIPT, 'bin', 'x64', 'Release', 'DataGeneration.dll'), directory_script)
-    print('            Done.')
+    # Create the directory for the scripts if it doesn't exist yet
+    (Path(CONFIG['Paths']['GTAV']) / 'scripts').mkdir(parents=True, exist_ok=True)
+
+    # Copy the compiled DataGeneration.dll and its NuGet dependencies to the GTA directory
+    LOGGER.info('Copying the compiled script and its dependencies to the GTA V directory.')
+    dll_files = [
+        'DataGeneration.dll',
+        'Microsoft.Bcl.AsyncInterfaces.dll',
+        'System.Buffers.dll',
+        'System.Collections.Immutable.dll',
+        'System.IO.Pipelines.dll',
+        'System.Memory.dll',
+        'System.Numerics.Vectors.dll',
+        'System.Runtime.CompilerServices.Unsafe.dll',
+        'System.Text.Encodings.Web.dll',
+        'System.Text.Json.dll',
+        'System.Threading.Tasks.Extensions.dll',
+        'Tomlyn.dll'
+    ]
+    for dll_file in dll_files:
+        shutil.copy(Path(CONFIG['Paths']['Scripts']) / 'bin' / 'x64' / 'Release' / dll_file, Path(CONFIG['Paths']['GTAV']) / 'scripts')
+
+    # Copy the config file to the GTA directory
+    shutil.copy(Path('config.toml'), Path(CONFIG['Paths']['GTAV']))
 
 
 def main():
 
-    # Parse the input arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--gta_ins_dir', '-g', help='Installation directory of GTA V', type=str, metavar='PATH',
-                        default='C:\\Program Files\\Rockstar Games\\Grand Theft Auto V Legacy')
-    args = parser.parse_args()
+    # Configure the logging
+    configure_logging(Path(CONFIG['Paths']['Logs']), CONFIG['Logging']['Level'])
 
     # Check if all directories exist and if the directories contain the right files
-    print('[OS]        Checking all directories given as input...')
-    if not os.path.exists(args.gta_ins_dir):
-        print('[OS]        ERROR: The path "{0}" does not exist. Please check your GTA installation.'.format(args.gta_ins_dir))
-        print('[OS]        Usage: python compile_script.py -g GTA_INS_DIR')
-        raise RuntimeError
-    if not os.path.exists(os.path.join(args.gta_ins_dir, 'GTA5.exe')):
-        print('[OS]        ERROR: The GTA installation path "{0}" does not contain "GTA5.exe". Please check your GTA installation.'.format(args.gta_ins_dir))
-        print('[OS]        Usage: python compile_script.py -g GTA_INS_DIR')
-        raise RuntimeError
-    print('            Done.')
+    check_path_exists(Path(CONFIG['Paths']['GTAV']), 'Check the GTA V directories or the config file.')
+    check_path_exists(Path(CONFIG['Paths']['GTAV']) / Path('GTA5.exe'), 'Check the GTA V directories or the config file.')
 
     # Initialize the scripts
-    initialize_scripts(os.path.join(args.gta_ins_dir, 'scripts'))
+    initialize_scripts()
 
 
 if __name__ == '__main__':

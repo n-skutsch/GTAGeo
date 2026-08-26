@@ -1,0 +1,377 @@
+# ============================================================
+# Data Generation Configuration
+# ============================================================
+
+# ----------------------------------------------------------
+# Paths
+# ----------------------------------------------------------
+
+[Paths]
+
+# Directories of GTA V
+GTAV    = '%PROGRAMFILES%/Rockstar Games/Grand Theft Auto V Legacy'
+GTAVUsr = '%USERPROFILE%/Documents/Rockstar Games/GTA V'
+
+# Directory of configs, logs, scripts, and WBG
+Configs = '%USERPROFILE%/Documents/GTAV/configs'
+Logs    = '%USERPROFILE%/Documents/GTAV/logs'
+Scripts = '%USERPROFILE%/Documents/GTAV/scripts'
+WBG     = '%USERPROFILE%/Documents/GTAV/wbg'
+
+# Directory of Visual Studio
+VS = '%PROGRAMFILES%/Microsoft Visual Studio/18/Community'
+
+# Directory of RenderDoc
+RenderDoc = '%PROGRAMFILES%/RenderDoc'
+
+# Directories for the data generation
+Data               = '%USERPROFILE%/Documents/GTAV/data'
+DataGroundView     = '%USERPROFILE%/Documents/GTAV/data/ground-view'
+DataGroundViewPano = '%USERPROFILE%/Documents/GTAV/data/ground-view-pano'
+DataDroneView      = '%USERPROFILE%/Documents/GTAV/data/drone-view'
+DataAerialView     = '%USERPROFILE%/Documents/GTAV/data/aerial-view'
+DataAerialViewArea = '%USERPROFILE%/Documents/GTAV/data/aerial-view-area'
+
+# Directory of the map tiles
+MapTiles = '%USERPROFILE%/Documents/GTAV/map/tiles'
+
+
+# ----------------------------------------------------------
+# Logging Level
+# ----------------------------------------------------------
+
+[Logging]
+
+# Logging level for the logger
+# 'NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'
+Level = 'INFO'
+
+
+# ----------------------------------------------------------
+# Generation Settings
+# ----------------------------------------------------------
+
+[Generation]
+
+# Data to extract from each RDC file
+GenerateRGB     = true
+GenerateDepth   = true
+GenerateStencil = true
+
+# Resolution of the game (square, in pixels)
+Resolution = 1024
+
+# Number of iterations/queries before overwriting the render targets and metadata files
+Checkpoint = 5
+
+# Padding factor for overlapping aerial views
+Padding = 1.0
+
+# Overlap ratio for overlapping aerial views
+Overlap = 0.8
+
+# Wait time after weather/time changes (milliseconds)
+# - DO NOT CHANGE -
+WaitAfterChange = 2000
+
+# File type for which the script waits to be created
+# - DO NOT CHANGE -
+WaitForFileRGB     = '_rgb.jpg'
+WaitForFileDepth   = '_depth.exr'
+WaitForFileStencil = '_stencil.png'
+
+
+# ----------------------------------------------------------
+# Camera Settings
+# ----------------------------------------------------------
+
+[Camera]
+
+# Ground-view and drone-view camera FOV
+GroundDroneFOV = 50.0
+
+# Aerial-view camera FOV
+AerialFOV = 90.0
+
+# Ground sampling distance
+GSD = 0.2
+
+# Minimum distance at which an object should be from to the camera
+MinimumDistance = 10.0
+
+# Maximum raycast render distance
+MaximumRenderDistance = 200.0
+
+# Number of raycasts in x- and y-direction to scan for objects in front of the camera
+NumberOfRays = 5
+
+
+# ----------------------------------------------------------
+# Randomization
+# ----------------------------------------------------------
+
+[Random]
+
+# Set to true if the time should be randomized for each query image
+RandomTime = true
+
+# Set to true if the weather should be randomized for each query image
+RandomWeather = false
+
+# Number of locations rendered in random mode
+NumberOfRandomLocations = 100
+
+# Weather types to choose from if the weather is set to random
+WeatherTypes = [
+    'CLEAR',
+    'EXTRASUNNY',
+    'CLOUDS',
+    'OVERCAST',
+    'RAIN',
+    'CLEARING',
+    'THUNDER',
+    'SMOG',
+    'FOGGY',
+    'XMAS',
+    'SNOW',
+    'SNOWLIGHT',
+    'BLIZZARD',
+    'HALLOWEEN',
+    'NEUTRAL',
+    'RAIN_HALLOWEEN',
+    'SNOW_HALLOWEEN'
+]
+
+# Rotation ranges for the camera rotation if it is generated randomly
+# - [pitch_min, pitch_max, roll_min, roll_max, yaw_min, yaw_max]
+RotationRanges = [
+    -10.0,
+     20.0,
+     -5.0,
+      5.0,
+      0.0,
+    360.0
+]
+
+
+# ----------------------------------------------------------
+# Map Bounds
+# - DO NOT CHANGE -
+# ----------------------------------------------------------
+
+[Map]
+
+# Default values for the map dimensions in x-, y-, and z-direction
+# - [x_min, x_max, y_min, y_max, z_min, z_max]
+MapDimensions = [
+    -3400.0,
+     4200.0,
+    -3600.0,
+     7700.0,
+     -100.0,
+     1000.0
+]
+
+
+# ----------------------------------------------------------
+# Panorama Headings
+# - DO NOT CHANGE -
+# ----------------------------------------------------------
+
+[Panorama]
+
+PanoramaHeadings = [
+    '_N',
+    '_S',
+    '_E',
+    '_W',
+    '_U',
+    '_D',
+    '_NE',
+    '_NW',
+    '_SE',
+    '_SW',
+    '_UN',
+    '_US',
+    '_UE',
+    '_UW',
+    '_DN',
+    '_DS',
+    '_DE',
+    '_DW'
+]
+
+
+# ----------------------------------------------------------
+# Panorama Rotations
+# - DO NOT CHANGE -
+# ----------------------------------------------------------
+
+[[PanoramaRotations]]
+X = 0.0
+Y = 0.0
+Z = 0.0
+
+[[PanoramaRotations]]
+X = 0.0
+Y = 0.0
+Z = 180.0
+
+[[PanoramaRotations]]
+X = 0.0
+Y = 0.0
+Z = 270.0
+
+[[PanoramaRotations]]
+X = 0.0
+Y = 0.0
+Z = 90.0
+
+[[PanoramaRotations]]
+X = 90.0
+Y = 0.0
+Z = 0.0
+
+[[PanoramaRotations]]
+X = -90.0
+Y = 0.0
+Z = 0.0
+
+[[PanoramaRotations]]
+X = 0.0
+Y = 0.0
+Z = 315.0
+
+[[PanoramaRotations]]
+X = 0.0
+Y = 0.0
+Z = 45.0
+
+[[PanoramaRotations]]
+X = 0.0
+Y = 0.0
+Z = 225.0
+
+[[PanoramaRotations]]
+X = 0.0
+Y = 0.0
+Z = 135.0
+
+[[PanoramaRotations]]
+X = 45.0
+Y = 0.0
+Z = 0.0
+
+[[PanoramaRotations]]
+X = 45.0
+Y = 0.0
+Z = 180.0
+
+[[PanoramaRotations]]
+X = 45.0
+Y = 0.0
+Z = 270.0
+
+[[PanoramaRotations]]
+X = 45.0
+Y = 0.0
+Z = 90.0
+
+[[PanoramaRotations]]
+X = -45.0
+Y = 0.0
+Z = 0.0
+
+[[PanoramaRotations]]
+X = -45.0
+Y = 0.0
+Z = 180.0
+
+[[PanoramaRotations]]
+X = -45.0
+Y = 0.0
+Z = 270.0
+
+[[PanoramaRotations]]
+X = -45.0
+Y = 0.0
+Z = 90.0
+
+
+# ----------------------------------------------------------
+# Aerial View Rotations
+# - DO NOT CHANGE -
+# ----------------------------------------------------------
+
+[[AerialViewRotations]]
+X = -90.0
+Y = 0.0
+Z = 0.0
+
+[[AerialViewRotations]]
+X = -45.0
+Y = 0.0
+Z = 0.0
+
+[[AerialViewRotations]]
+X = -135.0
+Y = 0.0
+Z = 0.0
+
+[[AerialViewRotations]]
+X = -45.0
+Y = -90.0
+Z = 270.0
+
+[[AerialViewRotations]]
+X = -45.0
+Y = 90.0
+Z = 90.0
+
+
+# ----------------------------------------------------------
+# URLs and files for initializing the project
+# - DO NOT CHANGE -
+# ----------------------------------------------------------
+
+[URLs]
+
+WebsitePython    = 'https://www.python.org/downloads/windows/'
+DownloadPython32 = 'https://www.python.org/ftp/python/?/python-?-embed-win32.zip'
+DownloadPython64 = 'https://www.python.org/ftp/python/?/python-?-embed-amd64.zip'
+WebsiteRenderDoc  = 'https://api.github.com/repos/baldurk/renderdoc/releases/latest'
+DownloadRenderDoc = 'https://github.com/baldurk/renderdoc/archive/refs/tags/?.zip'
+WebsiteScriptHookV  = 'https://www.dev-c.com/gtav/scripthookv/'
+DownloadScriptHookV = 'https://www.dev-c.com/files/ScriptHookV_?.zip'
+WebsiteScriptHookVDotNet  = 'https://github.com/scripthookvdotnet/scripthookvdotnet-nightly/releases/'
+DownloadScriptHookVDotNet = 'https://github.com/scripthookvdotnet/scripthookvdotnet-nightly/releases/download/?/ScriptHookVDotNet-?.zip'
+WebsiteWBG  = 'https://westechsolutions.net/sites/WindowedBorderlessGaming/download'
+DownloadWBG = 'https://westechsolutions.net/sites/WindowedBorderlessGaming/downloading/?token='
+
+
+[Files]
+
+ScriptHookV = [
+    'ScriptHookV.dll',
+    'dinput8.dll',
+    'NativeTrainer.asi'
+]
+ScriptHookVDotNet = [
+    'ScriptHookVDotNet.asi',
+    'ScriptHookVDotNet.ini',
+    'ScriptHookVDotNet3.dll'
+]
+Savegame = [
+    'SGTA50015',
+    'SGTA50015.bak'
+]
+WBG = [
+    'config.ini'
+]
+
+
+[TmpPaths]
+
+RenderDoc = '%USERPROFILE%/Documents/GTAV/tmp/RenderDoc'
+ScriptHookV = '%USERPROFILE%/Documents/GTAV/tmp/ScriptHookV'
+ScriptHookVDotNet = '%USERPROFILE%/Documents/GTAV/tmp/ScriptHookVDotNet'

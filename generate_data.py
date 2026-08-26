@@ -1,352 +1,342 @@
-import argparse
-import os
+import logging
+import panorama_projection_toolkit as ppt
 import subprocess
 import sys
 import time
 import wmi
 
-from ctypes import windll
+from pathlib import Path
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import FileCreatedEvent, FileMovedEvent, FileSystemEventHandler
 
-sys.path.append('C:\\Program Files\\RenderDoc')
+from process_rdc import rdc_to_data
+from utils import check_path_exists, configure_logging, load_config, shorten_path, sort_metadata
+
+
+# Load the config file
+CONFIG = load_config(Path('config.toml'))
+
+# Get the logger
+LOGGER = logging.getLogger('generate_data')
+
+# Import RenderDoc
+check_path_exists(Path(CONFIG['Paths']['RenderDoc']), 'Check the RenderDoc installation.')
+sys.path.append(str(Path(CONFIG['Paths']['RenderDoc'])))
 import renderdoc
-import rdc_to_data
 
 
-def panorama_stitching(file_path):
+def process_cubemaps(file_path: Path, number_of_cubemaps: int) -> Path | None:
     """
-    Check if the file completes a set of cubemaps such that a new panorama can be stitched.
+    Checks if all cubemaps have been extracted from the RDC file and stitches the panorama if the set of cubemaps is
+    complete.
 
     Args:
-        file_path (string): The file path of the created file.
+        file_path (Path): The file path of the last created file.
+        number_of_cubemaps (int): The number of cubemaps that should be processed; either 6 or 18.
 
-        Returns:
-            None
+    Returns:
+        pano_file_path (Path | None): The file path of the stitched panorama, or None if the panorama was not stitched.
     """
 
-    # If the file is a RGB image, 18 orientation are required
-    if file_path.lower().endswith('_rgb.jpg'):
-        orientations = ['_N' , '_S' , '_E' , '_W' , '_U' , '_D' ,
-                        '_NE', '_NW', '_SE', '_SW',
-                        '_UN', '_US', '_UE', '_UW',
-                        '_DN', '_DS', '_DE', '_DW']
+    # Check the number of cubemaps
+    if not number_of_cubemaps in [6, 18]:
+        LOGGER.warning('The number of cubemaps needs to be either 6 or 18.')
+        return None
 
-    # If the file is a stencil or depth image, 6 orientations are required
-    elif file_path.lower().endswith(('_stencil.png', '_depth.exr')):
-        orientations = ['_N', '_S', '_E', '_W', '_U', '_D']
+    # Depending on whether blending should be applied, select the corresponding list of orientations
+    orientations = CONFIG['Panorama']['PanoramaHeadings'][:number_of_cubemaps]
 
-    # It the file is neither a RGB image nor a stencil or depth image, something went wrong
-    else:
-        return
-
-    # Check if it's the last of the cubemaps
+    # Check if the last created file completes the set of cubemaps
     if not orientations[-1] in file_path:
-        return
+        return None
 
     # Check if all other cubemaps have been created successfully and save the file paths
     cubemap_file_paths = []
     for orientation in orientations:
-        cubemap_file_path = file_path.replace(orientations[-1], orientation)
-        if os.path.exists(cubemap_file_path):
+        cubemap_file_path = Path(str(file_path).replace(orientations[-1], orientation))
+        if cubemap_file_path.exists():
             cubemap_file_paths.append(cubemap_file_path)
         else:
-            return
+            LOGGER.warning(f'The cubemap file "{cubemap_file_path}" is missing. Panorama can not be created.')
+            return None
 
-    # Stitch and blend the panorama
-    pano_file_path = cubemap_file_paths[-1].replace(orientations[-1], '')
-    rdc_to_data.Panorama.stitch_panorama(cubemap_file_paths, pano_file_path)
+    # Load all cubemaps
+    cubemaps = []
+    for cubemap_file_path in cubemap_file_paths:
+        cubemaps.append(ppt.load_image(str(cubemap_file_path)))
 
+    # Stitch the panorama and save it
+    pano_size = (2 * cubemaps[0].shape[0], 4 * cubemaps[0].shape[1])
+    pano_file_path = Path(str(cubemap_file_paths[-1]).replace(orientations[-1], ''))
+    LOGGER.info(f'Stitching the panorama file "{pano_file_path}".')
+    pano = ppt.cubemaps_to_pano(cubemaps, pano_size)
+    ppt.save_image(str(pano_file_path), pano)
 
-class Logger():
-
-    def __init__(self, file_path):
-        self.file_path = file_path
-
-    def log(self, line):
-        """
-        Adds a line to the log file.
-
-        Args:
-            line (string): The line that should be added to the log file.
-
-        Returns:
-            None
-        """
-
-        # Open the file, get the current timestamp, and write the timestamp and line to the log file
-        with open(self.file_path, 'a') as f:
-            time_stamp = time.strftime('%Y%m%d-%H%M%S', time.localtime())
-            f.write(time_stamp + '\t' + line + '\n')
+    return pano_file_path
 
 
 class EventHandler(FileSystemEventHandler):
 
-    def __init__(self, logger, data_dir):
+    def __init__(self, save_rgb, save_depth, save_stencil):
         super().__init__()
-        self.logger = logger
-        self.data_dir = data_dir
+        self.save_rgb = save_rgb
+        self.save_depth = save_depth
+        self.save_stencil = save_stencil
 
-    def on_modified(self, event):
-        return
 
-    def on_deleted(self, event):
-        return
-        
-    def on_created(self, event):
+    def on_moved(self, event: FileMovedEvent) -> None:
         """
-        Extracts the render, depth, and stencil frame if a RDC file has been created.
+        This event is triggered when a file has been moved. This happens any time the data generation script has
+        finished saving a RenderDoc Capture file and renamed the TMP file.
 
         Args:
-            event (FileCreatedEvent): The file path of the render frame.
+            event (FileMovedEvent): The file moved event.
 
         Returns:
             None
         """
 
-        # Check if a RGB, depth, or stencil image or a RDC capture file has been created
-        if event.src_path.lower().endswith(('_rgb.jpg', '_stencil.png', '_depth.exr')):
-            panorama_stitching(event.src_path)
-            return
-        elif not event.src_path.lower().endswith('.rdc'):
+        LOGGER.debug('Event (file moved): "{0}" -> "{1}"'.format(shorten_path(event.src_path), shorten_path(event.dest_path)))
+
+        # Ignore all files that are not RDC files
+        if not event.dest_path.lower().endswith(('.rdc')):
             return
 
-        # Extract the file name of the created file from the path
-        file_name = os.path.basename(event.src_path).split('.')[0]
-        self.logger.log('[WatchDog]  The file "{0}" has been created.'.format(file_name))
+        # The 12 extended panorama orientations (beyond N, S, E, W, U, D) only carry a RGB image, so depth and
+        # stencil are not extracted for them
+        extended_headings = tuple(CONFIG['Panorama']['PanoramaHeadings'][6:])
+        is_extended_orientation = Path(event.dest_path).stem.endswith(extended_headings)
+        save_depth = self.save_depth and not is_extended_orientation
+        save_stencil = self.save_stencil and not is_extended_orientation
 
-        # Remove the frame number from the file name
-        file_name = file_name.split('_')
-        file_name = '_'.join(file_name[:-1])
+        # Determine the data that is extracted from the capture file
+        extracted_data = ', '.join(label for label, extract in (
+            ('RGB image', self.save_rgb),
+            ('depth map', save_depth),
+            ('stencil map', save_stencil)
+        ) if extract)
 
-        # Extract the data from the capture file
-        rdc_to_data.convert_rdc(event.src_path, file_name)
-        self.logger.log('[RenderDoc] Succesfully extracted all data from the capture.')
+        LOGGER.info(f'Extracting the following data from the capture file "{shorten_path(event.dest_path)}": {extracted_data}')
 
-        # Delete the capture file
-        os.remove(event.src_path)
-        self.logger.log('[WatchDog]  The file "{0}" has been deleted.'.format(os.path.basename(event.src_path)))
+        # Extract the RGB image, depth map, and stencil map from the RDC file
+        rdc_to_data(
+            event.dest_path,
+            save_rgb=self.save_rgb,
+            save_depth=save_depth,
+            save_stencil=save_stencil
+        )
+
+        # Delete the RDC file now that the required data has been extracted
+        LOGGER.debug(f'Deleting the capture file "{shorten_path(event.dest_path)}".')
+        Path(event.dest_path).unlink()
 
 
-class Initializer():
-
-    def __init__(self, logger):
-        self.logger = logger
-
-    def initialize_renderdoc(self, gta_ins_dir, data_dir):
+    def on_created(self, event: FileCreatedEvent) -> None:
         """
-        Initializes RenderDoc by activating the global hook.
+        This event is triggered when a file has been created. This happens any time the postprocessing script has
+        finished generating the RGB image, depth map, or stencil map.
 
         Args:
-            gta_ins_dir (string): The main installation directory of GTA V.
-            data_dir (string): The log directory.
+            event (FileCreatedEvent): The file created event.
 
         Returns:
             None
         """
 
-        self.logger.log('[RenderDoc] Activating the global hook...')
+        LOGGER.debug('Event (file created): {0}'.format(shorten_path(event.src_path)))
 
-        # Check if the global hook feature is available
-        if not renderdoc.CanGlobalHook():
-            self.logger.log('[RenderDoc] ERROR: The global hook can not be activated.')
-            raise RuntimeError
+        # Ignore all files that are not a RGB image, depth map, or stencil map file
+        if not event.src_path.lower().endswith(('_rgb.jpg', '_stencil.png', '_depth.exr')):
+            return
 
-        # Get the default capture options
-        capture_options = renderdoc.GetDefaultCaptureOptions()
+        # Set the number of cubemaps: the RGB panorama is stitched from all 18 views, the depth and stencil
+        # panoramas are stitched from the first 6 views only (N, S, E, W, U, D)
+        number_of_cubemaps = 0
+        if event.src_path.lower().endswith(('_rgb.jpg')):
+            number_of_cubemaps = 18
+        if event.src_path.lower().endswith(('_stencil.png', '_depth.exr')):
+            number_of_cubemaps = 6
 
-        # Activate the global hook
-        gta_exe_path = os.path.join(gta_ins_dir, 'GTA5.exe')
-        global_hook = renderdoc.StartGlobalHook(gta_exe_path, data_dir, capture_options)
-        if not global_hook.OK():
-            raise RuntimeError(global_hook.Message())
-
-        # Check if the global hook is active
-        if not renderdoc.IsGlobalHookActive():
-            self.logger.log('[RenderDoc] ERROR: The global hook could not be activated.')
-            raise RuntimeError
-
-        self.logger.log('            Done.')
+        # If all cubemaps have been extracted from the RDC files, stitch the panorama
+        pano_file_path = process_cubemaps(event.src_path, number_of_cubemaps)
 
 
-    def start_process(self, file_path, name):
-        """
-        Starts a process.
+def initialize_renderdoc() -> None:
+    """
+    Initializes RenderDoc by activating the global hook.
 
-        Args:
-            file_path (string): The file path of the executable application.
-            name (string): The name of the application.
+    Args:
+        None
 
-        Returns:
-            process (subprocess.Popen): The started process.
-        """
+    Returns:
+        None
+    """
 
-        self.logger.log('[System]    Starting {0}...'.format(name))
+    # Check if the global hook feature is available
+    if not renderdoc.CanGlobalHook():
+        LOGGER.error('The RenderDoc global hook can not be activated.')
+        raise RuntimeError('The RenderDoc global hook can not be activated.')
 
-        process = subprocess.Popen([file_path])
+    # Get the default capture options
+    capture_options = renderdoc.GetDefaultCaptureOptions()
 
-        self.logger.log('            Done.')
+    # Activate the global hook
+    gta_exe_path = Path(CONFIG['Paths']['GTAV']) / 'GTA5.exe'
+    global_hook = renderdoc.StartGlobalHook(str(gta_exe_path), str(Path(CONFIG['Paths']['Data'])), capture_options)
+    if not global_hook.OK():
+        LOGGER.error(f'The RenderDoc global hook can not be activated. Error Message: {global_hook.Message()}')
+        raise RuntimeError(f'The RenderDoc global hook can not be activated. Error Message: {global_hook.Message()}')
 
-        return process
-
-
-    def terminate_process(self, process, name):
-        """
-        Terminates a process.
-
-        Args:
-            process (subprocess.Popen): The subprocess that should be terminated.
-            name (string): The name of the application.
-
-        Returns:
-            None
-        """
-
-        self.logger.log('[System]    Closing {0}...'.format(name))
-
-        process.terminate()
-
-        self.logger.log('            Done.')
+    # Check if the global hook is active
+    if not renderdoc.IsGlobalHookActive():
+        LOGGER.error('The RenderDoc global hook could not be activated.')
+        raise RuntimeError('The RenderDoc global hook can not be activated.')
 
 
-    def get_gta_pid(self):
-        """
-        Determines the PID of the GTA V process.
+def get_gta_pid(timeout_s: int = 120) -> int:
+    """
+    Determines the PID of the GTA V process.
 
-        Args:
-            None
+    Args:
+        timeout_s (int): The timeout of the function in seconds.
 
-        Returns:
-            None
-        """
+    Returns:
+        gta_pid (int): The PID of the GTA V process.
+    """
 
-        self.logger.log('[System]    Searching for the PID of GTA...')
+    start = time.time()
 
-        # Start searching for the GTA V process
-        gta_pid = -1
-        while gta_pid == -1:
+    # Start searching for the GTA V process
+    gta_pid = -1
+    while gta_pid == -1:
 
-            # Get a list of all processes
-            processes = wmi.WMI()
+        # Check for timeout
+        if time.time() - start > timeout_s:
+            LOGGER.error('The PID of the GTA V process could not be found.')
+            raise TimeoutError('The PID of the GTA V process could not be found.')
 
-            # Check if GTA V is running
-            for process in processes.Win32_Process():
+        # Get a list of all processes
+        processes = wmi.WMI()
 
-                # Get the PID of GTA V
-                if 'GTA5.exe' in process.Name:
-                    gta_pid = process.ProcessId
+        # Check if GTA V is running
+        for process in processes.Win32_Process():
 
-            time.sleep(1)
+            # Get the PID of GTA V
+            if 'GTA5.exe' in process.Name:
+                gta_pid = process.ProcessId
 
-        self.logger.log('            Done.')
+        time.sleep(1)
 
-        return gta_pid
-        
+    return gta_pid
+    
 
-    def inject_into_process(self, pid, data_dir):
-        """
-        Injects RenderDoc into the GTA V process.
+def inject_into_process(pid: int) -> None:
+    """
+    Injects RenderDoc into the GTA V process.
 
-        Args:
-            pid (int): The PID of the GTA V process.
-            data_dir (string): The log directory.
+    Args:
+        pid (int): The PID of the GTA V process.
 
-        Returns:
-            None
-        """
+    Returns:
+        None
+    """
 
-        self.logger.log('[RenderDoc] Injecting into the process of GTA...')
-
-        # Get the default capture options
-        capture_options = renderdoc.GetDefaultCaptureOptions()
-        
-        # Inject RenderDoc into the process
-        injection = renderdoc.InjectIntoProcess(pid, [], data_dir, capture_options, False)
-        if not injection.result.OK():
-            raise RuntimeError(injection.result.Message())
-
-        self.logger.log('            Done.')
+    # Get the default capture options
+    capture_options = renderdoc.GetDefaultCaptureOptions()
+    
+    # Inject RenderDoc into the process
+    injection = renderdoc.InjectIntoProcess(pid, [], str(Path(CONFIG['Paths']['Data'])), capture_options, False)
+    if not injection.result.OK():
+        LOGGER.error(f'The injection into the GTA V process was not successful. Error Message: {injection.result.Message()}')
+        raise RuntimeError(f'The injection into the GTA V process was not successful. Error Message: {injection.result.Message()}')
 
 
 def main():
 
-    # Parse the input arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--gta_ins_dir', '-g', help='Installation directory of GTA V', type=str, metavar='PATH',
-                        default='C:\\Program Files\\Rockstar Games\\Grand Theft Auto V Legacy')
-    parser.add_argument('--data_dir', '-d', help='Directory in which the data and logs are saved', type=str, metavar='PATH',
-                        default='Data')
-    parser.add_argument('--wbg_dir', '-w', help='Installation directory of WindowedBorderlessGaming', type=str, metavar='PATH',
-                        default='WBG')
-    args = parser.parse_args()
+    # Configure the logging
+    configure_logging(Path(CONFIG['Paths']['Logs']), CONFIG['Logging']['Level'])
 
     # Check if all directories exist and if the directories contain the right files
-    print('[OS]        Checking all directories given as input...')
-    if not os.path.exists(args.gta_ins_dir):
-        print('[OS]        ERROR: The path "{0}" does not exist. Please check your GTA installation.'.format(args.gta_ins_dir))
-        print('[OS]        Usage: python generate_data.py -g GTA_INS_DIR -d DATA_DIR -w WBG_DIR')
-        raise RuntimeError
-    if not os.path.exists(os.path.join(args.gta_ins_dir, 'GTA5.exe')):
-        print('[OS]        ERROR: The GTA installation path "{0}" does not contain "GTA5.exe". Please check your GTA installation.'.format(args.gta_ins_dir))
-        print('[OS]        Usage: python generate_data.py -g GTA_INS_DIR -d DATA_DIR -w WBG_DIR')
-        raise RuntimeError
-    if not os.path.exists(args.data_dir):
-        print('[OS]        ERROR: The path "{0}" does not exist. Please check your folder structure.'.format(args.data_dir))
-        print('[OS]        Usage: python generate_data.py -g GTA_INS_DIR -d DATA_DIR -w WBG_DIR')
-        raise RuntimeError
-    if not os.path.exists(args.wbg_dir):
-        print('[OS]        ERROR: The path "{0}" does not exist. Please check your initialization.'.format(args.wbg_dir))
-        print('[OS]        Usage: python generate_data.py -g GTA_INS_DIR -d DATA_DIR -w WBG_DIR')
-        raise RuntimeError
-    print('            Done.')
+    check_path_exists(Path(CONFIG['Paths']['GTAV']), 'Check the GTA V directories or the config file.')
+    check_path_exists(Path(CONFIG['Paths']['GTAV']) / Path('GTA5.exe'), 'Check the GTA V directories or the config file.')
+    check_path_exists(Path(CONFIG['Paths']['GTAV']) / Path('GTAVLauncher.exe'), 'Check the GTA V directories or the config file.')
+    check_path_exists(Path(CONFIG['Paths']['Data']), 'Check the config file.')
+    check_path_exists(Path(CONFIG['Paths']['WBG']), 'Check the initialization or the config file.')
 
-    print('[WatchDog]  Starting and initializing GTA V, WBG, RenderDoc, and WatchDog...')
+    # Create the directory if it doesn't exist yet
+    Path(CONFIG['Paths']['Data']).mkdir(parents=True, exist_ok=True)
 
-    # Create the directories if they don't exist yet
-    if not os.path.exists(args.data_dir):
-        os.mkdir(args.data_dir)
-    if not os.path.exists(os.path.join(args.data_dir, 'ground-view')):
-        os.mkdir(os.path.join(args.data_dir, 'ground-view'))
-    if not os.path.exists(os.path.join(args.data_dir, 'drone-view')):
-        os.mkdir(os.path.join(args.data_dir, 'drone-view'))
-    if not os.path.exists(os.path.join(args.data_dir, 'satellite-view')):
-        os.mkdir(os.path.join(args.data_dir, 'satellite-view'))
+    process_wbg = None
+    process_gta = None
+    file_observer = None
 
-    # Create a new logger and initializer
-    logger = Logger(os.path.join(args.data_dir, 'log.txt'))
-    initializer = Initializer(logger)
+    try:
 
-    # Initialize RenderDoc
-    initializer.initialize_renderdoc(args.gta_ins_dir, args.data_dir)
+        # Initialize RenderDoc
+        LOGGER.info('Initializing RenderDoc and starting the global hook.')
+        initialize_renderdoc()
 
-    # Start Windowed Borderless Gaming and GTA V
-    process_wbg = initializer.start_process(os.path.join(args.wbg_dir, 'WindowedBorderlessGaming.exe'), 'WindowedBorderlessGaming')
-    process_gta = initializer.start_process(os.path.join(args.gta_ins_dir, 'GTAVLauncher.exe'), 'Grand Theft Auto V')
-    
-    # Inject RenderDoc into the GTA V process
-    pid = initializer.get_gta_pid()
-    initializer.inject_into_process(pid, args.data_dir)
+        # Start Windowed Borderless Gaming
+        wbg_path = Path(CONFIG['Paths']['WBG']) / 'WindowedBorderlessGaming.exe'
+        LOGGER.info(f'Starting the WBG process "{wbg_path}".')
+        process_wbg = subprocess.Popen([wbg_path])
 
-    # Start the WatchDog
-    logger.log('[WatchDog]  Starting the watchdog for Renderdoc capture files.')
-    file_observer = Observer()
-    file_observer.schedule(EventHandler(logger, args.data_dir), path=args.data_dir, recursive=True)
-    file_observer.start()
-    logger.log('            Done.')
+        # Start GTA V
+        gta_path = Path(CONFIG['Paths']['GTAV']) / 'GTAVLauncher.exe'
+        LOGGER.info(f'Starting the GTA V process "{gta_path}".')
+        process_gta = subprocess.Popen([gta_path])
+        
+        # Inject RenderDoc into the GTA V process
+        LOGGER.info('Injecting into the process of GTA V.')
+        inject_into_process(get_gta_pid())
 
-    print('            Done.')
-    print('[WatchDog]  WatchDog is active. You may now start the data generation process.')
+        # Start the WatchDog
+        LOGGER.info('Starting the watchdog for Renderdoc capture files.')
+        file_observer = Observer()
+        file_observer.schedule(
+            EventHandler(
+                CONFIG['Generation']['GenerateRGB'],
+                CONFIG['Generation']['GenerateDepth'],
+                CONFIG['Generation']['GenerateStencil']
+            ),
+            path=Path(CONFIG['Paths']['Data']),
+            recursive=True
+        )
+        file_observer.start()
+
+        LOGGER.info('RenderDoc is initialized and WatchDog is active. You may now start the data generation process.')
+
+        while True:
+            time.sleep(0.1)    
 
     # Terminate all processes if the script is terminated
-    try:
-        while True:
-            time.sleep(1)
     except KeyboardInterrupt:
-        file_observer.stop()
-    file_observer.join()
-    initializer.terminate_process(process_wbg, 'WindowedBorderlessGaming')
-    renderdoc.StopGlobalHook()
+        LOGGER.debug('KeyboardInterrupt received. Terminating the data generation.')
 
+    finally:
+
+        # Sort and deduplicate the metadata file
+        metadata_file = Path(CONFIG['Paths']['Data']) / 'metadata.csv'
+        if metadata_file.exists():
+            LOGGER.info(f'Sorting the metadata file "{metadata_file}".')
+            sort_metadata(metadata_file)
+
+        if file_observer is not None:
+            LOGGER.info('Terminating the watchdog for Renderdoc capture files.')
+            file_observer.stop()
+            file_observer.join()
+
+        if process_gta is not None:
+            LOGGER.info('Terminating the GTA V process.')
+            process_gta.terminate()
+
+        if process_wbg is not None:
+            LOGGER.info('Terminating the WBG process.')
+            process_wbg.terminate()
+
+        LOGGER.info('Terminating the global hook.')
+        renderdoc.StopGlobalHook()
+        
 
 if __name__ == '__main__':
     main()

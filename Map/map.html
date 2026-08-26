@@ -1,326 +1,436 @@
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
+  <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    
-    <title>GTA V - Rendering Locations</title>
-    
-    <link rel="shortcut icon" type="image/x-icon" href="docs/images/favicon.ico" />
+    <title>GTA V - Render Targets</title>
 
-    <!-- Leaflet for map functionalities -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <meta name="author" content="Nicolai Skutsch">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
-        html, body {
-            height: 100%;
-            width: 100%;
-            margin: 0;
-            padding: 0;
-        }
-        #map {
-            height: 100%;
-            width: 100%;
-            background: #384950;
-        }
-        .custom_controls {
-            background: #ffffff;
-            padding: 5px;
-            border-radius: 4px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        }
-        .custom_controls select,
-        .custom_controls button {
-            display: block;
-            width: 100px;
-            margin: 5px 0;
-        }
+      html, body {
+        height: 100%;
+        margin: 0;
+      }
+
+      #map {
+        height: 100%;
+        background: #384950;
+      }
+
+      .ui-container {
+        background: #FFFFFF;
+        padding: 10px;
+        border-radius: 6px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        width: 200px;
+        font-family: Arial, sans-serif;
+      }
+
+      label {
+        font-size: 12px;
+        font-weight: bold;
+        display: block;
+        margin-top: 6px;
+      }
+
+      input, select, button {
+        width: 100%;
+        margin-top: 4px;
+        padding: 4px;
+        box-sizing: border-box;
+      }
+
+      button:disabled {
+        opacity: 0.5;
+      }
+
+      .delete-btn {
+        background: #C0392B;
+        color: white;
+      }
+
+      .glow {
+        filter: drop-shadow(0 0 8px yellow);
+      }
     </style>
-</head>
+  </head>
 
-<body>
-<div id="map"></div>
-<script>
+  <body>
+    <div id="map"></div>
 
-    // Create a variable for the current mode
-    const MODES = [
-        {label: 'Urban', value: 1},
-        {label: 'Rural', value: 2},
-        {label: 'Drone', value: 3}
-    ];
-    let mode = MODES[0].value;
+    <script>
 
-    // Create a layer group for all modes
-    const locations_urban = L.layerGroup();
-    const locations_rural = L.layerGroup();
-    const locations_drone = L.layerGroup();
+      /* Settings */
 
-    // Load all tile layers
-    const layer_background = {
+      const SETTINGS = [
+        { label: 'urban', display: 'Urban', color: 'blue' },
+        { label: 'rural', display: 'Rural', color: 'green' },
+        { label: 'drone', display: 'Drone', color: 'red' }
+      ];
+
+      const LAYER_BACKGROUND = {
         'Game': '#384950',
-        'Print': '#4eb1d0',
-        'Render': '#0d2b4f'
-    };
-    const layer_game = L.tileLayer('https://s.rsg.sc/sc/images/games/GTAV/map/game/{z}/{x}/{y}.jpg', {
-        tileSize: 256,
-        noWrap: true,
-        attribution: '&copy; <a target="_blank" rel="noopener noreferrer" href="https://socialclub.rockstargames.com/jobs/">Rockstar Games Social Club</a>'
-    });
-    const layer_print = L.tileLayer('https://s.rsg.sc/sc/images/games/GTAV/map/print/{z}/{x}/{y}.jpg', {
-        tileSize: 256,
-        noWrap: true,
-        attribution: '&copy; <a target="_blank" rel="noopener noreferrer" href="https://socialclub.rockstargames.com/jobs/">Rockstar Games Social Club</a>'
-    });
-    const layer_render = L.tileLayer('https://s.rsg.sc/sc/images/games/GTAV/map/render/{z}/{x}/{y}.jpg', {
-        tileSize: 256,
-        noWrap: true,
-        attribution: '&copy; <a target="_blank" rel="noopener noreferrer" href="https://socialclub.rockstargames.com/jobs/">Rockstar Games Social Club</a>'
-    });
+        'Print': '#4EB1D0',
+        'Render': '#0D2B4F'
+      };
 
-    // Create the map with all layers
-    const max_bounds = L.latLngBounds([0, 0], [-192, 128])
-    const map = L.map('map', {
+      let selectedMarker = null;
+      let isDragging = false;
+      let suppressHistory = false;
+
+
+      /* Layers */
+
+      const locationsUrban = L.layerGroup();
+      const locationsRural = L.layerGroup();
+      const locationsDrone = L.layerGroup();
+
+      const layerGame = L.tileLayer('https://s.rsg.sc/sc/images/games/GTAV/map/game/{z}/{x}/{y}.jpg', { noWrap: true });
+      const layerPrint = L.tileLayer('https://s.rsg.sc/sc/images/games/GTAV/map/print/{z}/{x}/{y}.jpg', { noWrap: true });
+      const layerRender = L.tileLayer('https://s.rsg.sc/sc/images/games/GTAV/map/render/{z}/{x}/{y}.jpg', { noWrap: true });
+
+
+      /* Map */
+
+      const map = L.map('map', {
         crs: L.CRS.Simple,
-        center: [-98,64],
+        center: [-98, 64],
         zoom: 2,
         minZoom: 2,
         maxZoom: 7,
-        layers: [layer_game, locations_urban, locations_rural, locations_drone]
-    })
-    map.setMaxBounds(max_bounds);
+        layers: [layerGame, locationsUrban, locationsRural, locationsDrone]
+      });
 
-    // Add layer control for all layers and marker groups
-    const base_layers = {
-        'Game': layer_game,
-        'Print': layer_print,
-        'Render': layer_render
-    };
-    const overlays = {
-        'Locations City': locations_urban,
-        'Locations Rural': locations_rural,
-        'Locations Drone': locations_drone
-    };
-    const layerControl = L.control.layers(base_layers, overlays).addTo(map);
+      map.setMaxBounds([[0,0],[-192,128]]);
 
-    // Create a new circle marker
-    function newMarker(latlng, marker_color, layer_group) {
-        new L.circleMarker(latlng, {
-            color: marker_color,
-            radius: 8,
-            layerGroup: layer_group
-        }).addTo(layer_group).on('click', onMarkerLeftClick);
-    }
+      L.control.layers(
+        { 'Game': layerGame, 'Print': layerPrint, 'Render': layerRender },
+        { 'Urban': locationsUrban, 'Rural': locationsRural, 'Drone': locationsDrone }
+      ).addTo(map);
 
-    // Import marker data
-    function importMarkerData() {
+      map.on('baselayerchange', e => {
+        document.getElementById('map').style.backgroundColor = LAYER_BACKGROUND[e.name];
+      });
 
-        // Create an input element for file selection
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
 
-        // Define what happens when the user selects a file
-        input.onchange = function(event) {
+      /* UI Panel */
 
-            // Get the file that has been selected
-            const file = event.target.files[0];
-            if (!file) {
-                alert('No file selected');
-                return;
-            }
+      const panel = L.control({ position: 'topleft' });
+      panel.onAdd = function () {
+        const div = L.DomUtil.create('div', 'ui-container');
 
-            // Open the file
-            const reader = new FileReader();
-            reader.onload = function(e) {
+        div.innerHTML = `
+          <button id="importBtn">Import CSV</button>
+          <button id="exportBtn">Export CSV</button>
+          <button id="clearBtn">Clear Markers</button>
 
-                try {
+          <label>Setting</label>
+          <select id="settingSelect"></select>
 
-                    // Read the data from the file
-                    const data = JSON.parse(e.target.result);
+          <label>Pitch</label>
+          <input id="pitch" type="number" value="0">
 
-                    // Clear the existing markers
-                    locations_urban.clearLayers();
-                    locations_rural.clearLayers();
-                    locations_drone.clearLayers();
+          <label>Roll</label>
+          <input id="roll" type="number" value="0">
 
-                    // Load markers into their respective layers
-                    data.markers_urban.forEach(xy => {
-                        newMarker(convertCoordsGameMap(xy), 'blue', locations_urban);
-                    });
-                    data.markers_rural.forEach(xy => {
-                        newMarker(convertCoordsGameMap(xy), 'green', locations_rural);
-                    });
-                    data.markers_drone.forEach(xy => {
-                        newMarker(convertCoordsGameMap(xy), 'red', locations_drone);
-                    });
+          <label>Yaw</label>
+          <input id="yaw" type="number" value="0">
 
-                } catch (error) {
-                    console.error('Error while reading the file: ', error);
-                    alert('Failed to import the markers from the file.');
-                }
-            };
+          <label>FOV</label>
+          <input id="fov" type="number" value="50">
 
-            // Read the file content
-            reader.readAsText(file);
-        };
+          <button id="applyBtn" disabled>Apply Changes</button>
+          <button id="deleteBtn" class="delete-btn" disabled>Delete</button>
+        `;
 
-        // Trigger click event to open file dialog
-        input.click();
-    }
-
-    // Export marker data
-    function exportMarkerData() {
-        
-        const data = {
-            count_urban: locations_urban.getLayers().length,
-            count_rural: locations_rural.getLayers().length,
-            count_drone: locations_drone.getLayers().length,
-            markers_urban: [],
-            markers_rural: [],
-            markers_drone: []
-        };
-
-        // Collect markers from each layer group
-        locations_urban.eachLayer(marker => data.markers_urban.push(convertCoordsMapGame(marker.getLatLng())));
-        locations_rural.eachLayer(marker => data.markers_rural.push(convertCoordsMapGame(marker.getLatLng())));
-        locations_drone.eachLayer(marker => data.markers_drone.push(convertCoordsMapGame(marker.getLatLng())));
-
-        // Convert the data to JSON format and download it
-        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.href = url;
-        link.download = 'gta_v_markers.json';
-        link.click();
-
-        // Clean up
-        URL.revokeObjectURL(url);
-    }
-
-    // Add custom control elements to the user interface
-    const customControl = L.control({position: 'topleft'});
-    customControl.onAdd = function() {
-
-        // Create a div for the custom controls
-        const div = L.DomUtil.create('div', 'custom_controls');
-        
-        // Add a dropdown menu for selecting the mode
-        const select = L.DomUtil.create('select', '', div);
-        MODES.forEach((m) => {
-            const option = document.createElement('option');
-            option.value = m.value;
-            option.text = m.label;
-            select.appendChild(option);
-        });
-        select.onchange = function (e) {
-            mode = parseInt(e.target.value, 10);
-        };
-
-        // Add a button for importing marker data
-        const importButton = L.DomUtil.create('button', '', div);
-        importButton.textContent = 'Import';
-        importButton.onclick = importMarkerData;
-
-        // Add a button for exporting marker data
-        const exportButton = L.DomUtil.create('button', '', div);
-        exportButton.textContent = 'Export';
-        exportButton.onclick = exportMarkerData;
-
-        // Add a button for clearing all markers
-        const clearButton = L.DomUtil.create('button', '', div);
-        clearButton.textContent = 'Clear Markers';
-        clearButton.onclick = function(e) {
-            locations_urban.clearLayers();
-            locations_rural.clearLayers();
-            locations_drone.clearLayers();
-        };
-
-        // Prevent clicks to be propagated to the map
         L.DomEvent.disableClickPropagation(div);
-        
         return div;
-    };
-    customControl.addTo(map);
+      };
+      panel.addTo(map);
 
-    // Delete markers on left click
-    function onMarkerLeftClick(e) {
+      const settingSelect = document.getElementById('settingSelect');
+      SETTINGS.forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.label;
+        o.textContent = s.display;
+        settingSelect.appendChild(o);
+      });
 
-        // Set a flag that the marker was clicked instead of the map
-        e.originalEvent.markerClicked = true;
+      const pitchInput = document.getElementById('pitch');
+      const rollInput = document.getElementById('roll');
+      const yawInput = document.getElementById('yaw');
+      const fovInput = document.getElementById('fov');
+      const applyBtn = document.getElementById('applyBtn');
+      const deleteBtn = document.getElementById('deleteBtn');
 
-        // Estimate the corresponding layer group and remove the marker from it
-        const layer_group = e.target.options.layerGroup;
-        layer_group.removeLayer(e.target);
-    }
 
-    // Add markers on left click
-    function onLeftClick(e) {
+      /* Coordinate conversion */
 
-        // Check if a marker was clicked instead of the map
+      function mapToGame(latlng) {
+        const m = 0.01422, a = -119.5, b = 58.9;
+        return [(latlng.lng - b) / m, (latlng.lat - a) / m];
+      }
+
+      function gameToMap(pos) {
+        const m = 0.01422, a = -119.5, b = 58.9;
+        return L.latLng(m * pos[1] + a, m * pos[0] + b);
+      }
+
+      function getLayerByLabel(label) {
+        if (label === 'urban') return locationsUrban;
+        if (label === 'rural') return locationsRural;
+        return locationsDrone;
+      }
+
+      function getColor(label) {
+        return SETTINGS.find(s => s.label === label).color;
+      }
+
+
+      /* Event Handler: Marker */
+
+      function createMarker(latlng, setting, rot, fov, skipHistory=false) {
+        const marker = L.circleMarker(latlng, {
+          radius: 5,
+          color: getColor(setting)
+        });
+
+        marker.data = { setting, rot, fov };
+
+        marker.on('click', e => {
+          e.originalEvent.markerClicked = true;
+          selectMarker(marker);
+        });
+
+        enableDrag(marker);
+        getLayerByLabel(setting).addLayer(marker);
+
+        if (!skipHistory) saveHistory();
+      }
+
+      function enableDrag(marker) {
+        marker.on('mousedown', () => {
+          if (marker !== selectedMarker) return;
+          isDragging = true;
+          map.dragging.disable();
+        });
+
+        map.on('mousemove', e => {
+          if (!isDragging || marker !== selectedMarker) return;
+          marker.setLatLng(e.latlng);
+        });
+
+        map.on('mouseup', () => {
+          if (isDragging) {
+            isDragging = false;
+            map.dragging.enable();
+            saveHistory();
+          }
+        });
+      }
+
+      function selectMarker(marker) {
+        deselectMarker();
+        selectedMarker = marker;
+        marker.setStyle({ color: 'yellow', radius: 7 });
+        marker.getElement().classList.add('glow');
+
+        settingSelect.value = marker.data.setting;
+        pitchInput.value = marker.data.rot[0];
+        rollInput.value = marker.data.rot[1];
+        yawInput.value = marker.data.rot[2];
+        fovInput.value = marker.data.fov;
+
+        applyBtn.disabled = false;
+        deleteBtn.disabled = false;
+      }
+
+      function deselectMarker() {
+        if (!selectedMarker) return;
+        selectedMarker.setStyle({ color: getColor(selectedMarker.data.setting), radius: 5 });
+        selectedMarker.getElement().classList.remove('glow');
+        selectedMarker = null;
+        applyBtn.disabled = true;
+        deleteBtn.disabled = true;
+      }
+
+
+      /* Event Handler: Map */
+
+      map.on('click', e => {
         if (e.originalEvent.markerClicked) return;
 
-        // Check if the map was clicked inside of the bounds
-        if (!max_bounds.contains(e.latlng)) return;
-
-        // Select the corresponding layer group and marker color for the mode
-        let layer_group, marker_color;
-        switch (mode) {
-            case MODES[0].value:
-                layer_group = locations_urban;
-                marker_color = 'blue';
-                break;
-            case MODES[1].value:
-                layer_group = locations_rural;
-                marker_color = 'green';
-                break;
-            case MODES[2].value:
-                layer_group = locations_drone;
-                marker_color = 'red';
-                break;
+        if (selectedMarker) {
+          deselectMarker();
+          return;
         }
 
-        // Create a new marker
-        newMarker(e.latlng, marker_color, layer_group);
-    }
+        createMarker(
+          e.latlng,
+          settingSelect.value,
+          [parseFloat(pitchInput.value), parseFloat(rollInput.value), parseFloat(yawInput.value)],
+          parseFloat(fovInput.value)
+        );
+      });
 
-    // Change the background when the base layer is changed
-    function onBaseLayerChange(e) {
-        document.getElementById('map').style.backgroundColor = layer_background[e.name];
-    }
 
-    // Convert the image coordinates to ingame coordinates
-    function convertCoordsMapGame(latlng) {
+      /* Event Handler: Buttons */
 
-        const m =    0.01422;
-        const a = -119.5;
-        const b =   58.9;
+      applyBtn.onclick = () => {
+        if (!selectedMarker) return;
 
-        const x = (latlng.lng - b) / m;
-        const y = (latlng.lat - a) / m;
+        selectedMarker.data.setting = settingSelect.value;
+        selectedMarker.data.rot = [
+          parseFloat(pitchInput.value),
+          parseFloat(rollInput.value),
+          parseFloat(yawInput.value)
+        ];
+        selectedMarker.data.fov = parseFloat(fovInput.value);
 
-        return [x, y]
-    }
+        deselectMarker();
+        saveHistory();
+      };
 
-    // Convert the ingame coordinates to image coordinates
-    function convertCoordsGameMap(xy) {
+      deleteBtn.onclick = () => {
+        if (!selectedMarker) return;
+        if (!confirm('Do you really want to delete this marker?')) return;
 
-        const m =    0.01422;
-        const a = -119.5;
-        const b =   58.9;
+        getLayerByLabel(selectedMarker.data.setting).removeLayer(selectedMarker);
+        selectedMarker = null;
+        applyBtn.disabled = true;
+        deleteBtn.disabled = true;
+        saveHistory();
+      };
 
-        const lat = m * xy[1] + a
-        const lng = m * xy[0] + b
+      document.getElementById('clearBtn').onclick = () => {
+        if (!confirm('Do you really want to clear all markers?')) return;
 
-        return L.latLng(lat, lng)
-    }
+        locationsUrban.clearLayers();
+        locationsRural.clearLayers();
+        locationsDrone.clearLayers();
+        saveHistory();
+      };
 
-    // Add the LeftClick event listener to the map
-    map.on('click', onLeftClick);
-    map.on('baselayerchange', onBaseLayerChange);
 
-</script>
-</body>
+      /* Import and Export */
 
+      function exportCSV() {
+        const header = 'setting;x;y;z;rot_x;rot_y;rot_z;fov;rendered';
+        const rows = [header];
+
+        function collect(layer) {
+          layer.eachLayer(m => {
+            const pos = mapToGame(m.getLatLng());
+            rows.push(
+              `${m.data.setting};${pos[0].toFixed(2)};${pos[1].toFixed(2)};0.00;${m.data.rot[0].toFixed(2)};${m.data.rot[1].toFixed(2)};${m.data.rot[2].toFixed(2)};${m.data.fov.toFixed(2)};False`
+            );
+          });
+        }
+
+        if (map.hasLayer(locationsUrban)) collect(locationsUrban);
+        if (map.hasLayer(locationsRural)) collect(locationsRural);
+        if (map.hasLayer(locationsDrone)) collect(locationsDrone);
+
+        const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'render_targets.csv';
+        link.click();
+      }
+
+      function importCSV(text) {
+        suppressHistory = true;
+
+        locationsUrban.clearLayers();
+        locationsRural.clearLayers();
+        locationsDrone.clearLayers();
+
+        const lines = text.trim().split('\n');
+        lines.shift();
+
+        lines.forEach(line => {
+          const p = line.split(';');
+          createMarker(
+            gameToMap([parseFloat(p[1]), parseFloat(p[2])]),
+            p[0],
+            [parseFloat(p[4]), parseFloat(p[5]), parseFloat(p[6])],
+            parseFloat(p[7]),
+            true
+          );
+        });
+
+        suppressHistory = false;
+        saveHistory();
+      }
+
+      document.getElementById('exportBtn').onclick = exportCSV;
+
+      document.getElementById('importBtn').onclick = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.csv';
+        input.onchange = e => {
+          const reader = new FileReader();
+          reader.onload = () => importCSV(reader.result);
+          reader.readAsText(e.target.files[0]);
+        };
+        input.click();
+      };
+
+      
+      /* History */
+
+      function exportState() {
+        const data = [];
+        [locationsUrban, locationsRural, locationsDrone].forEach(layer => {
+          layer.eachLayer(m => {
+            data.push({
+              setting: m.data.setting,
+              pos: mapToGame(m.getLatLng()),
+              rot: m.data.rot,
+              fov: m.data.fov
+            });
+          });
+        });
+        return data;
+      }
+
+      function restoreState(state) {
+        suppressHistory = true;
+        locationsUrban.clearLayers();
+        locationsRural.clearLayers();
+        locationsDrone.clearLayers();
+
+        state.forEach(m => {
+          createMarker(gameToMap(m.pos), m.setting, m.rot, m.fov, true);
+        });
+
+        suppressHistory = false;
+      }
+
+      function saveHistory() {
+        if (suppressHistory) return;
+        history.pushState(exportState(), '');
+      }
+
+      window.onpopstate = e => {
+        if (e.state) restoreState(e.state);
+      };
+
+
+      /* Keyboard Shortcuts */
+
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Delete' && selectedMarker) deleteBtn.click();
+        if (e.ctrlKey && e.key === 'z') history.back();
+        if (e.ctrlKey && e.key === 'y') history.forward();
+      });
+
+    </script>
+  </body>
 </html>

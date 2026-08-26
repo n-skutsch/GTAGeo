@@ -119,18 +119,23 @@ namespace DataGeneration
     public unsafe class RenderDoc
     {
         private readonly string RENDERDOC_PATH = "renderdoc.dll";
-        public readonly RENDERDOC_API_1_6_0 API;
+        public readonly RENDERDOC_API_1_7_0 API;
 
         public unsafe RenderDoc(string file_path)
         {
             Library renderdoc_library = Library.LoadOSLibrary(RENDERDOC_PATH);
             renderdoc_library.LoadOSFunction("RENDERDOC_GetAPI", out pRENDERDOC_GetAPI GetAPI);
-            void *api_pointer;
-            if (GetAPI(RENDERDOC_Version.eRENDERDOC_API_Version_1_6_0, &api_pointer) != 1)
+            void* api_pointer;
+            if (GetAPI(RENDERDOC_Version.eRENDERDOC_API_Version_1_7_0, &api_pointer) != 1)
             {
                 throw new Exception("The RenderDoc API could not be loaded from the following path: " + RENDERDOC_PATH);
             }
-            this.API = Marshal.PtrToStructure<RENDERDOC_API_1_6_0>((IntPtr) api_pointer);
+            this.API = Marshal.PtrToStructure<RENDERDOC_API_1_7_0>((IntPtr)api_pointer);
+            this.SetFilePath(file_path);
+        }
+
+        public unsafe void SetFilePath(string file_path)
+        {
             if (!file_path.EndsWith("\\\\"))
             {
                 file_path = file_path + "\\\\";
