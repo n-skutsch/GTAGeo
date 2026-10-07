@@ -5,7 +5,8 @@
 </p>
 
 <p align="center">
-  <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="License: CC BY-NC-SA 4.0" src="https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg"></a>
+  <a href="https://www.gnu.org/licenses/gpl-3.0"><img alt="License: GPL v3+" src="https://img.shields.io/badge/License-GPL%20v3+-blue.svg"></a>
+  <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Dataset: CC BY-NC-SA 4.0" src="https://img.shields.io/badge/Dataset-CC%20BY--NC--SA%204.0-lightgrey.svg"></a>
   <img alt="Platform: Windows" src="https://img.shields.io/badge/Platform-Windows-blue">
   <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-blue">
   <img alt="Game: GTA V Legacy" src="https://img.shields.io/badge/Game-GTA%20V_Legacy-orange">
@@ -370,9 +371,13 @@ Since the modifications do not affect the online mode, do not use Rockstar's or 
 
 ## License
 
-The GTAGeo data generation pipeline (this repository) and the GTAGeo dataset by Skutsch et al. are licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/) license. See the [LICENSE](LICENSE) file for the full license text.
+The GTAGeo data generation pipeline (this repository) by Skutsch et al. is licensed under the [GNU General Public License v3.0 or later (GPL-3.0-or-later)](https://www.gnu.org/licenses/gpl-3.0). See the [LICENSE](LICENSE) file for the full license text.
 
-This license governs the pipeline and dataset themselves and is granted in addition to, and does not override or supersede, the [Modification and Copyright Policy of Rockstar Games and Take-Two Interactive](#modification-and-copyright-policy-of-rockstar-games-and-take-two-interactive) described above, which continues to apply to any use of Grand Theft Auto V and its assets.
+**Additional permission under GNU GPL version 3 section 7:** If you modify this Program, or any covered work, by linking or combining it with ScriptHookV or Grand Theft Auto V (or a modified version of those), containing parts covered by the terms of their respective proprietary licenses, the licensors of this Program grant you additional permission to convey the resulting work.
+
+The GTAGeo dataset by Skutsch et al., including the render targets in [data/render_targets.csv](data/render_targets.csv) and the example images in the [images](images) folder, is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/) license. See the [LICENSE-DATASET](LICENSE-DATASET) file for the full license text.
+
+These licenses govern the pipeline and dataset themselves and are granted in addition to, and do not override or supersede, the [Modification and Copyright Policy of Rockstar Games and Take-Two Interactive](#modification-and-copyright-policy-of-rockstar-games-and-take-two-interactive) described above, which continues to apply to any use of Grand Theft Auto V and its assets.
 
 
 ## Citation

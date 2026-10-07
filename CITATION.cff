@@ -1,0 +1,57 @@
+cff-version: 1.2.0
+message: "Please cite our work if you use data from the GTAGeo dataset, generate new data using our pipeline, or modify our pipeline."
+title: "GTAGeo: Synthetic Data Generation for Visual Geo-Localization using GTA V"
+type: software
+authors:
+  - family-names: Skutsch
+    given-names: Nicolai
+    orcid: "https://orcid.org/0009-0009-6092-740X"
+    affiliation: "HTW Berlin - University of Applied Sciences"
+repository-code: "https://github.com/n-skutsch/GTAGeo"
+license: GPL-3.0-or-later
+preferred-citation:
+  type: conference-paper
+  title: "No Mountain, no Building, no Cue? Synthetic Data Generation of Digital Surface Models and Their Application to Visual Geo-Localization"
+  authors:
+    - family-names: Skutsch
+      given-names: Nicolai
+      orcid: "https://orcid.org/0009-0009-6092-740X"
+      affiliation: "HTW Berlin - University of Applied Sciences"
+    - family-names: Hellwich
+      given-names: Olaf
+      orcid: "https://orcid.org/0000-0002-2871-9266"
+      affiliation: "Technical University of Berlin"
+    - family-names: Fuchs-Kittowski
+      given-names: Frank
+      orcid: "https://orcid.org/0000-0002-5445-3764"
+      affiliation: "HTW Berlin - University of Applied Sciences"
+  collection-title: "Proceedings of the 21st International Conference on Computer Vision Theory and Applications (VISAPP 2026)"
+  volume: 2
+  start: 743
+  end: 751
+  isbn: "978-989-758-804-4"
+  doi: "10.5220/0014487400004084"
+  publisher:
+    name: SciTePress
+  year: 2026
+references:
+  - type: conference-paper
+    title: "Synthetic Data Generation for Visual Geo-Localization using GTA V"
+    authors:
+      - family-names: Skutsch
+        given-names: Nicolai
+        orcid: "https://orcid.org/0009-0009-6092-740X"
+        affiliation: "HTW Berlin - University of Applied Sciences"
+      - family-names: Hellwich
+        given-names: Olaf
+        orcid: "https://orcid.org/0000-0002-2871-9266"
+        affiliation: "Technical University of Berlin"
+      - family-names: Fuchs-Kittowski
+        given-names: Frank
+        orcid: "https://orcid.org/0000-0002-5445-3764"
+        affiliation: "HTW Berlin - University of Applied Sciences"
+    collection-title: "Proceedings of 11th International Congress on Information and Communication Technology (ICICT 2026)"
+    volume: 2
+    publisher:
+      name: Springer
+    year: 2026
